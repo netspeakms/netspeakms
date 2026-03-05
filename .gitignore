@@ -1,0 +1,30 @@
+# Master .gitignore for Netspeak Project
+
+# Dependencies
+**/node_modules
+**/dist
+**/build
+**/.next
+**/out
+
+# Environment Variables (CRITICAL)
+**/.env
+**/.env.local
+**/.env.production
+**/.env.development
+**/volumes/db/data/
+
+# OS/IDEs
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# Prisma
+**/prisma/migrations/
+
+# Docker
+**/volumes/
+
+# Batch Files (Optional, keep them if you want but usually good to ignore local scripts)
+# *.bat 

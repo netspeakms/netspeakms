@@ -1,0 +1,42 @@
+
+Windows IP Configuration
+
+   Host Name . . . . . . . . . . . . : Netspeak
+   Primary Dns Suffix  . . . . . . . : 
+   Node Type . . . . . . . . . . . . : Hybrid
+   IP Routing Enabled. . . . . . . . : No
+   WINS Proxy Enabled. . . . . . . . : No
+
+Ethernet adapter Ethernet:
+
+   Connection-specific DNS Suffix  . : 
+   Description . . . . . . . . . . . : Realtek PCIe GbE Family Controller
+   Physical Address. . . . . . . . . : 34-5A-60-1A-C6-19
+   DHCP Enabled. . . . . . . . . . . : Yes
+   Autoconfiguration Enabled . . . . : Yes
+   Link-local IPv6 Address . . . . . : fe80::98a1:50b0:ef2d:9f7a%8(Preferred) 
+   IPv4 Address. . . . . . . . . . . : 192.168.1.25(Preferred) 
+   Subnet Mask . . . . . . . . . . . : 255.255.255.0
+   Lease Obtained. . . . . . . . . . : Friday, March 6, 2026 1:15:03 AM
+   Lease Expires . . . . . . . . . . : Saturday, March 7, 2026 1:15:24 AM
+   Default Gateway . . . . . . . . . : 192.168.1.1
+   DHCP Server . . . . . . . . . . . : 192.168.1.1
+   DHCPv6 IAID . . . . . . . . . . . : 104094304
+   DHCPv6 Client DUID. . . . . . . . : 00-01-00-01-31-2F-19-C2-34-5A-60-1A-C6-19
+   DNS Servers . . . . . . . . . . . : 192.168.1.1
+   NetBIOS over Tcpip. . . . . . . . : Enabled
+
+Ethernet adapter vEthernet (WSL (Hyper-V firewall)):
+
+   Connection-specific DNS Suffix  . : 
+   Description . . . . . . . . . . . : Hyper-V Virtual Ethernet Adapter
+   Physical Address. . . . . . . . . : 00-15-5D-63-A6-B8
+   DHCP Enabled. . . . . . . . . . . : No
+   Autoconfiguration Enabled . . . . : Yes
+   Link-local IPv6 Address . . . . . : fe80::2ac8:878f:bdb0:f5bd%27(Preferred) 
+   IPv4 Address. . . . . . . . . . . : 172.21.176.1(Preferred) 
+   Subnet Mask . . . . . . . . . . . : 255.255.240.0
+   Default Gateway . . . . . . . . . : 
+   DHCPv6 IAID . . . . . . . . . . . : 452990301
+   DHCPv6 Client DUID. . . . . . . . : 00-01-00-01-31-2F-19-C2-34-5A-60-1A-C6-19
+   NetBIOS over Tcpip. . . . . . . . : Enabled
