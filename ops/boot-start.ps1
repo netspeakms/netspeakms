@@ -19,6 +19,8 @@ $EXIT_ROUTE_FAIL = 41
 
 $logDir = Join-Path $RepoRoot "ops\logs"
 $logFile = Join-Path $logDir "boot-start.log"
+$lockFile = Join-Path $RepoRoot "ops\logs\boot-start.lock"
+$script:startupLockOwned = $false
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
@@ -33,6 +35,7 @@ function Exit-WithCode {
         Write-Log -Message $Message -Level "ERROR"
     }
     Write-Log -Message ("Exiting with code {0}" -f $Code) -Level "INFO"
+    Release-StartupLock
     exit $Code
 }
 
@@ -40,6 +43,33 @@ function Ensure-LogPath {
     if (-not (Test-Path $script:logDir)) {
         New-Item -Path $script:logDir -ItemType Directory -Force | Out-Null
     }
+}
+
+function Release-StartupLock {
+    if ($script:startupLockOwned -and (Test-Path $script:lockFile)) {
+        Remove-Item -Path $script:lockFile -Force -ErrorAction SilentlyContinue
+    }
+    $script:startupLockOwned = $false
+}
+
+function Acquire-StartupLock {
+    if (Test-Path $script:lockFile) {
+        $existingPidRaw = (Get-Content -Path $script:lockFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+        $existingPid = 0
+        [void][int]::TryParse(($existingPidRaw | Out-String).Trim(), [ref]$existingPid)
+
+        if ($existingPid -gt 0) {
+            $existingProc = Get-Process -Id $existingPid -ErrorAction SilentlyContinue
+            if ($existingProc) {
+                Exit-WithCode -Code $EXIT_INFRA_FAIL -Message "Another startup run is already in progress (PID $existingPid). Wait for it to finish before starting again."
+            }
+        }
+
+        Remove-Item -Path $script:lockFile -Force -ErrorAction SilentlyContinue
+    }
+
+    Set-Content -Path $script:lockFile -Value $PID -Encoding ascii
+    $script:startupLockOwned = $true
 }
 
 function Initialize-DockerCliConfig {
@@ -170,11 +200,15 @@ function Wait-ForDocker {
 function Wait-ForContainerHealthy {
     param(
         [string]$ContainerName,
-        [int]$TimeoutSeconds = 300
+        [int]$TimeoutSeconds = 300,
+        [switch]$AutoRestartOnce,
+        [int]$RestartAfterUnhealthySeconds = 120
     )
 
     Write-Log "Waiting for container '$ContainerName' to report healthy state."
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $unhealthySince = $null
+    $hasRestarted = $false
 
     while ((Get-Date) -lt $deadline) {
         $healthStatus = (& docker inspect -f "{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}" $ContainerName 2>$null).Trim()
@@ -185,6 +219,29 @@ function Wait-ForContainerHealthy {
             }
 
             $runStatus = (& docker inspect -f "{{.State.Status}}" $ContainerName 2>$null).Trim()
+
+            if ($healthStatus -eq "unhealthy") {
+                if (-not $unhealthySince) {
+                    $unhealthySince = Get-Date
+                }
+
+                $unhealthySeconds = ((Get-Date) - $unhealthySince).TotalSeconds
+                if ($AutoRestartOnce -and -not $hasRestarted -and $unhealthySeconds -ge $RestartAfterUnhealthySeconds) {
+                    Write-Log "Container '$ContainerName' has been unhealthy for $([int]$unhealthySeconds) second(s). Restarting once for self-recovery."
+                    docker restart $ContainerName | Out-Null
+                    if ($LASTEXITCODE -eq 0) {
+                        $hasRestarted = $true
+                        $unhealthySince = $null
+                        Start-Sleep -Seconds 5
+                        continue
+                    }
+
+                    Write-Log "Restart attempt for '$ContainerName' failed. Continuing to wait for readiness." "WARN"
+                }
+            } else {
+                $unhealthySince = $null
+            }
+
             Write-Log "Container '$ContainerName' not ready yet (state=$runStatus, health=$healthStatus). Retrying in 5 second(s)."
         } else {
             Write-Log "Container '$ContainerName' not found yet. Retrying in 5 second(s)."
@@ -242,12 +299,20 @@ function Invoke-ComposeUp {
 function Test-LocalRoutes {
     Write-Log "Validating local host-based routes through NPM."
 
-    $appStatus = (curl.exe -s -o NUL -w "%{http_code}" -H "Host: app.netspeak.com.ph" http://127.0.0.1)
+    $appStatus = Wait-ForExpectedHttpStatus `
+        -Name "app.netspeak.com.ph" `
+        -HostHeader "app.netspeak.com.ph" `
+        -ExpectedStatuses @("200") `
+        -TimeoutSeconds 180
     if ($appStatus -ne "200") {
         Exit-WithCode -Code $EXIT_ROUTE_FAIL -Message "App route check failed. Expected 200, got $appStatus."
     }
 
-    $apiStatus = (curl.exe -s -o NUL -w "%{http_code}" -H "Host: api.netspeak.com.ph" http://127.0.0.1)
+    $apiStatus = Wait-ForExpectedHttpStatus `
+        -Name "api.netspeak.com.ph" `
+        -HostHeader "api.netspeak.com.ph" `
+        -ExpectedStatuses @("200", "401", "403") `
+        -TimeoutSeconds 180
     if (@("200", "401", "403") -notcontains $apiStatus) {
         Exit-WithCode -Code $EXIT_ROUTE_FAIL -Message "API route check failed. Expected 200/401/403, got $apiStatus."
     }
@@ -255,7 +320,32 @@ function Test-LocalRoutes {
     Write-Log "Route checks passed (app=$appStatus, api=$apiStatus)."
 }
 
+function Wait-ForExpectedHttpStatus {
+    param(
+        [string]$Name,
+        [string]$HostHeader,
+        [string[]]$ExpectedStatuses,
+        [int]$TimeoutSeconds = 120
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $lastStatus = "000"
+
+    while ((Get-Date) -lt $deadline) {
+        $lastStatus = (curl.exe -s -o NUL -w "%{http_code}" -H "Host: $HostHeader" http://127.0.0.1).Trim()
+        if ($ExpectedStatuses -contains $lastStatus) {
+            return $lastStatus
+        }
+
+        Write-Log "Route '$Name' not ready yet (status=$lastStatus). Retrying in 5 second(s)."
+        Start-Sleep -Seconds 5
+    }
+
+    return $lastStatus
+}
+
 Ensure-LogPath
+Acquire-StartupLock
 Initialize-DockerCliConfig
 Write-Log "=================================================="
 Write-Log ("Boot orchestrator started. Mode: {0}" -f ($(if ($BootMode) { "boot" } else { "manual" })))
@@ -280,9 +370,15 @@ Invoke-ComposeUp `
     -FailureCode $EXIT_INFRA_FAIL `
     -FailureMessage "Failed to start Supabase database container."
 
-Wait-ForContainerHealthy -ContainerName "supabase-db" -TimeoutSeconds 600
+Wait-ForContainerHealthy -ContainerName "supabase-db" -TimeoutSeconds 600 -AutoRestartOnce -RestartAfterUnhealthySeconds 120
 
 Invoke-TrackedDbHotfix
+
+Invoke-ComposeUp `
+    -WorkingDirectory $supabaseComposeWorkingDirectory `
+    -Command "$supabaseComposeCommand up -d --no-recreate" `
+    -FailureCode $EXIT_INFRA_FAIL `
+    -FailureMessage "Failed to start remaining Supabase + NPM services."
 
 Invoke-ComposeUp `
     -WorkingDirectory $RepoRoot `
@@ -297,4 +393,5 @@ Start-CloudflaredIfNeeded
 
 Write-Log "Startup completed successfully."
 Write-Log "=================================================="
+Release-StartupLock
 exit $EXIT_OK
