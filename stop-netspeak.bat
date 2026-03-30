@@ -5,14 +5,17 @@ echo ==========================================
 echo    Netspeak Systems - STOPPING SERVER
 echo ==========================================
 
-:: 1. Stop Next.js (Node)
-echo [1/2] Stopping Next.js Frontend...
-taskkill /F /IM node.exe /T >nul 2>&1
+:: 1. Stop Next.js (Docker)
+echo [1/2] Stopping Next.js Frontend (Docker)...
+cd /d "c:\netspeakms-supabase"
+call docker compose -f docker-compose.app.yml down
 
-:: 2. Stop Supabase and Nginx (Docker)
-echo [2/2] Stopping Supabase and Nginx (Docker)...
+
+:: 2. Stop Supabase and Nginx Proxy Manager (Docker)
+echo [2/2] Stopping Supabase and NPM (Docker)...
 cd /d "c:\netspeakms-supabase\supabase-project"
-call docker compose -f docker-compose.yml -f docker-compose.nginx.yml down
+call docker compose -f docker-compose.yml -f ../docker-compose.npm.yml down
+
 
 
 echo ------------------------------------------

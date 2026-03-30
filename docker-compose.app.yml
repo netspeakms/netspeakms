@@ -1,0 +1,21 @@
+services:
+  netspeak-app:
+    container_name: netspeak-frontend
+    build:
+      context: ./netspeak
+      dockerfile: Dockerfile
+    restart: always
+    expose:
+      - "3000"
+    env_file:
+      - ./netspeak/.env.local
+    environment:
+      # Container-to-container DB access must use service DNS, not localhost.
+      DATABASE_URL: postgresql://postgres:7727bca099812d1340e1a549be546c95@supabase-db:5432/postgres
+      DIRECT_URL: postgresql://postgres:7727bca099812d1340e1a549be546c95@supabase-db:5432/postgres
+    networks:
+      - supabase_default
+
+networks:
+  supabase_default:
+    external: true

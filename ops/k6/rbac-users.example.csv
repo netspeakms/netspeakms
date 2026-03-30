@@ -1,0 +1,7 @@
+role,username,password
+admin,admin_user_001,admin_password_001
+admin,admin_user_002,admin_password_002
+staff,staff_user_001,staff_password_001
+staff,staff_user_002,staff_password_002
+teacher,teacher_user_001,teacher_password_001
+teacher,teacher_user_002,teacher_password_002

@@ -1,41 +1,36 @@
 @echo off
 SETLOCAL EnableDelayedExpansion
 
-echo ==========================================
-echo    Netspeak Systems - Auto Startup
-echo ==========================================
+set "SCRIPT_DIR=%~dp0"
+set "BOOT_SWITCH=%~1"
+set "MODE_ARG="
 
-:: Check if Docker is running
-docker info >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] Docker is not running. Please start Docker Desktop first.
-    pause
-    exit /b 1
+if /I "%BOOT_SWITCH%"=="--boot" (
+    set "MODE_ARG=-BootMode"
+    echo ==========================================
+    echo    Netspeak Systems - Boot Startup
+    echo ==========================================
+) else (
+    echo ==========================================
+    echo    Netspeak Systems - Manual Startup
+    echo ==========================================
 )
 
-:: 1. Start Supabase and Nginx Proxy
-echo [1/2] Starting Supabase and Nginx (Docker)...
-cd /d "c:\netspeakms-supabase\supabase-project"
-docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
-if %errorlevel% neq 0 (
-    echo [ERROR] Failed to start Docker containers.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%ops\boot-start.ps1" %MODE_ARG%
+set "EXIT_CODE=%ERRORLEVEL%"
+
+if not "%BOOT_SWITCH%"=="--boot" (
+    if "%EXIT_CODE%"=="0" (
+        echo ------------------------------------------
+        echo Startup completed successfully.
+        echo ------------------------------------------
+    ) else (
+        echo ------------------------------------------
+        echo Startup failed with exit code %EXIT_CODE%.
+        echo Check ops\logs\boot-start.log for details.
+        echo ------------------------------------------
+    )
     pause
-    exit /b 1
 )
 
-:: 2. Start Next.js Frontend
-echo [2/2] Starting Next.js Frontend...
-echo ------------------------------------------
-echo APP URL: https://app.netspeak.com.ph
-echo API URL: https://api.netspeak.com.ph
-echo ------------------------------------------
-cd /d "c:\netspeakms-supabase\netspeak"
-
-:: Ensure Prisma client is valid
-call npx prisma generate
-
-call npm run dev
-
-
-pause
-
+exit /b %EXIT_CODE%
