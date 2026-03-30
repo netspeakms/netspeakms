@@ -262,13 +262,26 @@ Write-Log ("Boot orchestrator started. Mode: {0}" -f ($(if ($BootMode) { "boot" 
 
 Wait-ForDocker
 
-Invoke-ComposeUp `
-    -WorkingDirectory (Join-Path $RepoRoot "supabase-project") `
-    -Command "docker compose -f docker-compose.yml -f ../docker-compose.npm.yml up -d" `
-    -FailureCode $EXIT_INFRA_FAIL `
-    -FailureMessage "Failed to start Supabase + NPM compose stack."
+$supabaseComposeWorkingDirectory = Join-Path $RepoRoot "supabase-project"
+$supabaseComposeCommand = "docker compose -f docker-compose.yml -f ../docker-compose.npm.yml"
 
-Wait-ForContainerHealthy -ContainerName "supabase-db" -TimeoutSeconds 300
+Write-Log "Starting base Supabase services before the full dependency graph."
+Invoke-ComposeUp `
+    -WorkingDirectory $supabaseComposeWorkingDirectory `
+    -Command "$supabaseComposeCommand up -d vector" `
+    -FailureCode $EXIT_INFRA_FAIL `
+    -FailureMessage "Failed to start Supabase vector service."
+
+Wait-ForContainerHealthy -ContainerName "supabase-vector" -TimeoutSeconds 60
+
+Invoke-ComposeUp `
+    -WorkingDirectory $supabaseComposeWorkingDirectory `
+    -Command "$supabaseComposeCommand up -d --no-deps db" `
+    -FailureCode $EXIT_INFRA_FAIL `
+    -FailureMessage "Failed to start Supabase database container."
+
+Wait-ForContainerHealthy -ContainerName "supabase-db" -TimeoutSeconds 600
+
 Invoke-TrackedDbHotfix
 
 Invoke-ComposeUp `
